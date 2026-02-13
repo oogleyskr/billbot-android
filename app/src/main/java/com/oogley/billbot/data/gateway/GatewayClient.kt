@@ -352,10 +352,11 @@ class GatewayClient @Inject constructor() {
     }
 
     // Public API: Send chat message (streaming events come via chatEvents flow)
-    suspend fun sendChat(message: String, sessionKey: String? = null) {
+    suspend fun sendChat(message: String, sessionKey: String = "android://companion") {
         val params = buildJsonObject {
+            put("sessionKey", sessionKey)
             put("message", message)
-            sessionKey?.let { put("sessionKey", it) }
+            put("idempotencyKey", UUID.randomUUID().toString())
         }
         request("chat.send", params)
     }
@@ -366,10 +367,8 @@ class GatewayClient @Inject constructor() {
     }
 
     // Public API: Get chat history
-    suspend fun getChatHistory(sessionKey: String? = null): JsonElement? {
-        val params = sessionKey?.let {
-            buildJsonObject { put("sessionKey", it) }
-        }
+    suspend fun getChatHistory(sessionKey: String = "android://companion"): JsonElement? {
+        val params = buildJsonObject { put("sessionKey", sessionKey) }
         return request("chat.history", params)
     }
 

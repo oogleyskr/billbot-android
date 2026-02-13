@@ -18,11 +18,11 @@ class ChatRepository @Inject constructor(
 
     val chatEvents: SharedFlow<ChatEvent> = gateway.chatEvents
 
-    suspend fun sendMessage(text: String, sessionKey: String? = null) {
+    suspend fun sendMessage(text: String, sessionKey: String = "android://companion") {
         gateway.sendChat(text, sessionKey)
     }
 
-    suspend fun getHistory(sessionKey: String? = null): List<ChatMessage> {
+    suspend fun getHistory(sessionKey: String = "android://companion"): List<ChatMessage> {
         val result = gateway.getChatHistory(sessionKey) ?: return emptyList()
         return try {
             val messages = result.jsonObject["messages"]?.jsonArray ?: result.jsonArray
