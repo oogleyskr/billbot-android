@@ -106,6 +106,8 @@ class ChatViewModel @Inject constructor(
 
             is ChatEvent.Delta -> {
                 ensureAssistantBubble()
+                // Deltas are MONOLITHIC — full text so far, not incremental
+                contentBuffer.clear()
                 contentBuffer.append(event.text)
                 updateCurrentAssistant(
                     content = contentBuffer.toString(),
