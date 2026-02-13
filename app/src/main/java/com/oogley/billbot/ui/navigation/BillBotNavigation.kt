@@ -2,7 +2,7 @@ package com.oogley.billbot.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Chat
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -34,7 +34,7 @@ enum class BillBotTab(
     val label: String,
     val icon: ImageVector
 ) {
-    Chat("chat", "Chat", Icons.Default.Chat),
+    Chat("chat", "Chat", Icons.AutoMirrored.Filled.Chat),
     Dashboard("dashboard", "Dashboard", Icons.Default.Dashboard),
     Settings("settings", "Settings", Icons.Default.Settings)
 }
