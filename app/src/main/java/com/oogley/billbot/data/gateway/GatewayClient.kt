@@ -204,11 +204,8 @@ class GatewayClient @Inject constructor() {
                         "tick" -> {
                             lastTickTime = System.currentTimeMillis()
                         }
-                        "chat" -> {
-                            parseChatEvent(event.payload)
-                        }
-                        "agent" -> {
-                            parseChatEvent(event.payload)
+                        "chat", "agent" -> {
+                            parseChatEvent(event.event, event.payload)
                         }
                     }
 
@@ -220,53 +217,101 @@ class GatewayClient @Inject constructor() {
         }
     }
 
-    private fun parseChatEvent(payload: JsonElement?) {
+    private fun parseChatEvent(eventName: String, payload: JsonElement?) {
         if (payload == null) return
         scope.launch {
             try {
                 val obj = payload.jsonObject
-                val type = obj["type"]?.jsonPrimitive?.contentOrNull
 
-                when (type) {
-                    "delta", "text" -> {
-                        val text = obj["text"]?.jsonPrimitive?.contentOrNull
-                            ?: obj["delta"]?.jsonPrimitive?.contentOrNull
-                            ?: obj["content"]?.jsonPrimitive?.contentOrNull
-                        if (text != null) _chatEvents.emit(ChatEvent.Delta(text))
-                    }
-                    "reasoning" -> {
-                        val text = obj["text"]?.jsonPrimitive?.contentOrNull
-                            ?: obj["reasoning"]?.jsonPrimitive?.contentOrNull
-                        if (text != null) _chatEvents.emit(ChatEvent.ReasoningDelta(text))
-                    }
-                    "tool_call" -> {
-                        val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
-                        val args = obj["arguments"]?.toString() ?: "{}"
-                        _chatEvents.emit(ChatEvent.ToolCall(name, args))
-                    }
-                    "tool_result" -> {
-                        val name = obj["name"]?.jsonPrimitive?.contentOrNull ?: ""
-                        val result = obj["result"]?.jsonPrimitive?.contentOrNull ?: ""
-                        _chatEvents.emit(ChatEvent.ToolResult(name, result))
-                    }
-                    "started", "start" -> _chatEvents.emit(ChatEvent.Started)
-                    "completed", "done", "end", "finish" -> _chatEvents.emit(ChatEvent.Completed)
-                    "error" -> {
-                        val msg = obj["message"]?.jsonPrimitive?.contentOrNull ?: "Unknown error"
-                        _chatEvents.emit(ChatEvent.Error(msg))
-                    }
-                    else -> {
-                        // Try to extract text from unknown format
-                        val text = obj["text"]?.jsonPrimitive?.contentOrNull
-                            ?: obj["content"]?.jsonPrimitive?.contentOrNull
-                            ?: obj["delta"]?.jsonPrimitive?.contentOrNull
-                        if (text != null) _chatEvents.emit(ChatEvent.Delta(text))
-                    }
+                when (eventName) {
+                    "chat" -> parseChatStateEvent(obj)
+                    "agent" -> parseAgentStreamEvent(obj)
                 }
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to parse chat event: ${e.message}")
+                Log.w(TAG, "Failed to parse $eventName event: ${e.message}")
             }
         }
+    }
+
+    // "chat" events use { state: "delta"|"final"|"error"|"aborted", message: {...} }
+    private suspend fun parseChatStateEvent(obj: JsonObject) {
+        val state = obj["state"]?.jsonPrimitive?.contentOrNull ?: return
+
+        when (state) {
+            "delta" -> {
+                val message = obj["message"]?.jsonObject ?: return
+                val text = extractTextFromContent(message)
+                if (text != null) _chatEvents.emit(ChatEvent.Delta(text))
+            }
+            "final" -> {
+                val message = obj["message"]?.jsonObject
+                if (message != null) {
+                    val text = extractTextFromContent(message)
+                    if (text != null) _chatEvents.emit(ChatEvent.Delta(text))
+                }
+                _chatEvents.emit(ChatEvent.Completed)
+            }
+            "error" -> {
+                val msg = obj["errorMessage"]?.jsonPrimitive?.contentOrNull ?: "Unknown error"
+                _chatEvents.emit(ChatEvent.Error(msg))
+            }
+            "aborted" -> {
+                _chatEvents.emit(ChatEvent.Completed)
+            }
+        }
+    }
+
+    // "agent" events use { stream: "assistant"|"tool"|"lifecycle", data: {...} }
+    private suspend fun parseAgentStreamEvent(obj: JsonObject) {
+        val stream = obj["stream"]?.jsonPrimitive?.contentOrNull ?: return
+        val data = obj["data"]?.jsonObject
+
+        when (stream) {
+            "assistant" -> {
+                val text = data?.get("text")?.jsonPrimitive?.contentOrNull
+                if (text != null) _chatEvents.emit(ChatEvent.Delta(text))
+            }
+            "tool" -> {
+                val phase = data?.get("phase")?.jsonPrimitive?.contentOrNull
+                val name = data?.get("name")?.jsonPrimitive?.contentOrNull ?: ""
+                when (phase) {
+                    "call", "start" -> _chatEvents.emit(ChatEvent.ToolCall(name, ""))
+                    "result", "end" -> {
+                        val result = data?.get("result")?.jsonPrimitive?.contentOrNull
+                            ?: data?.get("partialResult")?.jsonPrimitive?.contentOrNull ?: ""
+                        _chatEvents.emit(ChatEvent.ToolResult(name, result))
+                    }
+                }
+            }
+            "lifecycle" -> {
+                val phase = data?.get("phase")?.jsonPrimitive?.contentOrNull
+                when (phase) {
+                    "start" -> _chatEvents.emit(ChatEvent.Started)
+                    "end" -> _chatEvents.emit(ChatEvent.Completed)
+                    "error" -> {
+                        val msg = data?.get("error")?.jsonPrimitive?.contentOrNull ?: "Agent error"
+                        _chatEvents.emit(ChatEvent.Error(msg))
+                    }
+                }
+            }
+        }
+    }
+
+    // Extract text from OpenClaw message format: { content: [{ type: "text", text: "..." }] }
+    private fun extractTextFromContent(message: JsonObject): String? {
+        // Try content array format first
+        val contentArray = message["content"]
+        if (contentArray != null && contentArray is kotlinx.serialization.json.JsonArray) {
+            val texts = contentArray.mapNotNull { item ->
+                val itemObj = item.jsonObject
+                if (itemObj["type"]?.jsonPrimitive?.contentOrNull == "text") {
+                    itemObj["text"]?.jsonPrimitive?.contentOrNull
+                } else null
+            }
+            if (texts.isNotEmpty()) return texts.joinToString("")
+        }
+        // Fallback: content as string
+        return message["content"]?.jsonPrimitive?.contentOrNull
     }
 
     private fun startTickWatchdog() {
@@ -358,7 +403,12 @@ class GatewayClient @Inject constructor() {
             put("message", message)
             put("idempotencyKey", UUID.randomUUID().toString())
         }
-        request("chat.send", params)
+        val result = request("chat.send", params)
+        // Emit Started immediately — lifecycle event may not always arrive
+        val status = result?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
+        if (status == "started" || status == "ok") {
+            _chatEvents.emit(ChatEvent.Started)
+        }
     }
 
     // Public API: Abort current chat
