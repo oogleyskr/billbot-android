@@ -119,7 +119,18 @@ data class MemoryCortexSnapshot(
     val middlewareLatencyMs: Long? = null,
     val llmLatencyMs: Long? = null,
     val collectedAt: Long = 0,
-    val error: String? = null
+    val error: String? = null,
+    val gpuTemperatureCelsius: Double? = null,
+    val gpuHotSpotCelsius: Double? = null,
+    val gpuCoreClockMHz: Double? = null,
+    val gpuMemoryClockMHz: Double? = null,
+    val gpuUtilizationPercent: Double? = null,
+    val gpuFanRPM: Double? = null,
+    val gpuFanPercent: Double? = null,
+    val gpuPowerDrawWatts: Double? = null,
+    val hwMonitorStatus: String? = null,
+    val hwMonitorLatencyMs: Long? = null,
+    val hwSensorsAvailable: List<String>? = null
 )
 
 @Serializable

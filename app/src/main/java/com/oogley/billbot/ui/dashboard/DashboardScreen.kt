@@ -121,20 +121,14 @@ private fun DevicesView(snapshot: InfrastructureSnapshot?) {
     snapshot?.systemMetrics?.let { SystemMetricsCard(title = "WSL2 System", metrics = it) }
 }
 
-/**
- * Metrics view — grouped by metric type across all devices.
- *
- * Note: Radeon VII hardware metrics (temp, utilization, power) are not available.
- * The Memory Cortex collects data from llama.cpp which only exposes VRAM and tok/s,
- * not GPU hardware stats. To add those, we'd need AMD GPU monitoring on the Windows host.
- */
+/** Metrics view — grouped by metric type across all devices. */
 @Composable
 private fun MetricsView(snapshot: InfrastructureSnapshot?) {
     // Temperature — all GPU temps + CPU temps
     val temps = mutableListOf<Pair<String, Double>>()
     snapshot?.gpu?.gpus?.firstOrNull()?.temperatureCelsius?.let { temps.add("DGX Spark" to it) }
     snapshot?.localGpu?.gpus?.firstOrNull()?.temperatureCelsius?.let { temps.add("RTX 3090" to it) }
-    // Radeon VII: no temp data (llama.cpp doesn't expose GPU hardware metrics)
+    snapshot?.memoryCortex?.gpuTemperatureCelsius?.let { temps.add("Radeon VII" to it) }
     snapshot?.systemMetrics?.cpuTemperatureCelsius?.let { temps.add("WSL2 CPU" to it) }
     if (temps.isNotEmpty()) {
         DashboardCard(title = "Temperatures", icon = Icons.Default.Thermostat) {
@@ -155,11 +149,10 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
                         fontWeight = FontWeight.Bold, color = color)
                 }
             }
-            // Note Radeon VII limitation
-            if (snapshot?.memoryCortex != null) {
-                Text("Radeon VII: no hardware metrics (llama.cpp limitation)",
+            if (snapshot?.memoryCortex != null && snapshot.memoryCortex!!.hwMonitorStatus == "error") {
+                Text("Radeon VII: hardware monitor offline",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = StatusYellow,
                     modifier = Modifier.padding(top = 4.dp))
             }
         }
@@ -196,10 +189,11 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
         }
     }
 
-    // GPU Utilization (Radeon VII: not available)
+    // GPU Utilization
     val utilization = mutableListOf<Pair<String, Double>>()
     snapshot?.gpu?.gpus?.firstOrNull()?.utilizationPercent?.let { utilization.add("DGX Spark" to it) }
     snapshot?.localGpu?.gpus?.firstOrNull()?.utilizationPercent?.let { utilization.add("RTX 3090" to it) }
+    snapshot?.memoryCortex?.gpuUtilizationPercent?.let { utilization.add("Radeon VII" to it) }
     if (utilization.isNotEmpty()) {
         DashboardCard(title = "GPU Utilization", icon = Icons.Default.Speed) {
             utilization.forEach { (device, pct) ->
@@ -209,16 +203,10 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                 )
             }
-            if (snapshot?.memoryCortex != null) {
-                Text("Radeon VII: not available",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp))
-            }
         }
     }
 
-    // Power Draw (Radeon VII: not available)
+    // Power Draw
     val power = mutableListOf<Triple<String, Double, Double?>>() // name, draw, limit
     snapshot?.gpu?.gpus?.firstOrNull()?.let { g ->
         g.powerDrawWatts?.let { power.add(Triple("DGX Spark", it, g.powerLimitWatts)) }
@@ -226,6 +214,7 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
     snapshot?.localGpu?.gpus?.firstOrNull()?.let { g ->
         g.powerDrawWatts?.let { power.add(Triple("RTX 3090", it, g.powerLimitWatts)) }
     }
+    snapshot?.memoryCortex?.gpuPowerDrawWatts?.let { power.add(Triple("Radeon VII", it, 300.0)) }
     if (power.isNotEmpty()) {
         DashboardCard(title = "Power Draw", icon = Icons.Default.Bolt) {
             power.forEach { (device, draw, limit) ->
@@ -237,12 +226,6 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
                         modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                     )
                 }
-            }
-            if (snapshot?.memoryCortex != null) {
-                Text("Radeon VII: not available",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 4.dp))
             }
         }
     }
@@ -455,6 +438,68 @@ fun MemoryCortexCard(cortex: MemoryCortexSnapshot) {
         cortex.modelName?.let { MetricRow("Model", it) }
         MetricRow("LLM", cortex.llmStatus.uppercase())
         MetricRow("Middleware", cortex.middlewareStatus.uppercase())
+
+        // Hardware metrics from LibreHardwareMonitor
+        if (cortex.hwMonitorStatus == "ok") {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            cortex.gpuTemperatureCelsius?.let { temp ->
+                val color = when {
+                    temp >= 85 -> StatusRed
+                    temp >= 75 -> StatusYellow
+                    else -> StatusGreen
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("GPU Temp", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${temp.toInt()}°C", style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold, color = color)
+                }
+            }
+            cortex.gpuHotSpotCelsius?.let { temp ->
+                val color = when {
+                    temp >= 95 -> StatusRed
+                    temp >= 85 -> StatusYellow
+                    else -> StatusGreen
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Hot Spot", style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${temp.toInt()}°C", style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold, color = color)
+                }
+            }
+            cortex.gpuUtilizationPercent?.let {
+                MetricRow("GPU Load", "${it.toInt()}%")
+                LinearProgressIndicator(
+                    progress = { (it / 100.0).toFloat() },
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                )
+            }
+            cortex.gpuCoreClockMHz?.let { MetricRow("Core Clock", "${it.toInt()} MHz") }
+            cortex.gpuMemoryClockMHz?.let { MetricRow("Mem Clock", "${it.toInt()} MHz") }
+            cortex.gpuPowerDrawWatts?.let { MetricRow("Power", "${it.toInt()}W / 300W") }
+            cortex.gpuFanRPM?.let { rpm ->
+                val fanText = cortex.gpuFanPercent?.let { "${rpm.toInt()} RPM (${it.toInt()}%)" }
+                    ?: "${rpm.toInt()} RPM"
+                MetricRow("Fan", fanText)
+            }
+        } else if (cortex.hwMonitorStatus == "error") {
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            Text("Hardware monitor offline",
+                style = MaterialTheme.typography.labelSmall,
+                color = StatusYellow,
+                modifier = Modifier.padding(vertical = 2.dp))
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
         cortex.generationTokPerSec?.let { MetricRow("Gen Speed", "%.1f tok/s".format(it)) }
         cortex.memoriesCount?.let { MetricRow("Memories", "$it") }
         cortex.kvCacheUsageRatio?.let {
