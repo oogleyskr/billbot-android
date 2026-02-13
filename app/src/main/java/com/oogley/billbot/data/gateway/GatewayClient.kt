@@ -363,9 +363,11 @@ class GatewayClient @Inject constructor() {
         // Started event comes via "agent" lifecycle stream or first "chat" delta
     }
 
-    // Public API: Abort current chat
-    suspend fun abortChat() {
-        request("chat.abort")
+    // Public API: Abort current chat generation
+    // Server requires sessionKey to identify which session to abort
+    suspend fun abortChat(sessionKey: String = "android://companion") {
+        val params = buildJsonObject { put("sessionKey", sessionKey) }
+        request("chat.abort", params)
     }
 
     // Public API: Get chat history
@@ -375,8 +377,9 @@ class GatewayClient @Inject constructor() {
     }
 
     // Public API: Reset session (clears server-side history)
+    // Server schema uses "key" (not "sessionKey") with additionalProperties:false
     suspend fun resetSession(sessionKey: String = "android://companion") {
-        val params = buildJsonObject { put("sessionKey", sessionKey) }
+        val params = buildJsonObject { put("key", sessionKey) }
         request("sessions.reset", params)
     }
 

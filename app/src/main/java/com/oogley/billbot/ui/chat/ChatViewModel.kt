@@ -76,7 +76,13 @@ class ChatViewModel @Inject constructor(
                 )
             }.filter { it.role == "user" || it.role == "assistant" }
 
-            _uiState.update { it.copy(messages = messages) }
+            // Reset generating state on reconnect — the server-side generation
+            // may have completed or been lost while we were disconnected.
+            // If the server is still generating, new chat events will re-set this.
+            currentAssistantId = null
+            reasoningBuffer.clear()
+            contentBuffer.clear()
+            _uiState.update { it.copy(messages = messages, isGenerating = false) }
         } catch (e: Exception) {
             // History loading is non-critical
         }
@@ -193,11 +199,22 @@ class ChatViewModel @Inject constructor(
 
     fun abort() {
         viewModelScope.launch {
+            // Always clear generating state locally, even if server abort fails.
+            // This prevents the UI from getting stuck in "thinking" permanently.
+            val id = currentAssistantId
+            currentAssistantId = null
+            _uiState.update { state ->
+                state.copy(
+                    messages = if (id != null) state.messages.map { msg ->
+                        if (msg.id == id) msg.copy(isStreaming = false) else msg
+                    } else state.messages,
+                    isGenerating = false
+                )
+            }
             try {
                 chatRepo.abort()
-                _uiState.update { it.copy(isGenerating = false) }
-            } catch (e: Exception) {
-                // Best effort
+            } catch (_: Exception) {
+                // Best effort — UI already cleared above
             }
         }
     }
