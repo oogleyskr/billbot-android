@@ -89,15 +89,18 @@ fun DashboardScreen(viewModel: DashboardViewModel = hiltViewModel()) {
     }
 }
 
-/** Devices view — one card per device/service, current layout. */
+/** Devices view — one card per device/service. */
 @Composable
 private fun DevicesView(snapshot: InfrastructureSnapshot?) {
-    // DGX Spark GPU + model name from inference speed
+    // DGX Spark GPU + model + DGX remote system metrics (network)
     snapshot?.gpu?.let { gpu ->
         val modelName = snapshot.inferenceSpeed?.let { "gpt-oss-120b" }
-        GpuCard(title = "DGX Spark (GB10)", gpu = gpu, models = listOfNotNull(
-            modelName?.let { "LLM" to it }
-        ))
+        GpuCard(
+            title = "DGX Spark (GB10)",
+            gpu = gpu,
+            models = listOfNotNull(modelName?.let { "LLM" to it }),
+            systemMetrics = snapshot.remoteSystemMetrics
+        )
     }
 
     // RTX 3090 + multimodal service models
@@ -111,29 +114,27 @@ private fun DevicesView(snapshot: InfrastructureSnapshot?) {
     // Memory Cortex (Radeon VII)
     snapshot?.memoryCortex?.let { MemoryCortexCard(cortex = it) }
 
-    // Provider Health
-    snapshot?.providers?.let { ProviderCard(providers = it) }
-
-    // SSH Tunnels
-    snapshot?.tunnels?.let { if (it.isNotEmpty()) TunnelCard(tunnels = it) }
-
-    // Multimodal Services
-    snapshot?.multimodal?.let { MultimodalCard(multimodal = it) }
+    // All Services — providers + tunnels + memory cortex + multimodal combined
+    ServicesCard(snapshot)
 
     // WSL2 System Metrics
     snapshot?.systemMetrics?.let { SystemMetricsCard(title = "WSL2 System", metrics = it) }
-
-    // DGX System Metrics
-    snapshot?.remoteSystemMetrics?.let { SystemMetricsCard(title = "DGX System", metrics = it) }
 }
 
-/** Metrics view — grouped by metric type across all devices. */
+/**
+ * Metrics view — grouped by metric type across all devices.
+ *
+ * Note: Radeon VII hardware metrics (temp, utilization, power) are not available.
+ * The Memory Cortex collects data from llama.cpp which only exposes VRAM and tok/s,
+ * not GPU hardware stats. To add those, we'd need AMD GPU monitoring on the Windows host.
+ */
 @Composable
 private fun MetricsView(snapshot: InfrastructureSnapshot?) {
     // Temperature — all GPU temps + CPU temps
     val temps = mutableListOf<Pair<String, Double>>()
     snapshot?.gpu?.gpus?.firstOrNull()?.temperatureCelsius?.let { temps.add("DGX Spark" to it) }
     snapshot?.localGpu?.gpus?.firstOrNull()?.temperatureCelsius?.let { temps.add("RTX 3090" to it) }
+    // Radeon VII: no temp data (llama.cpp doesn't expose GPU hardware metrics)
     snapshot?.systemMetrics?.cpuTemperatureCelsius?.let { temps.add("WSL2 CPU" to it) }
     if (temps.isNotEmpty()) {
         DashboardCard(title = "Temperatures", icon = Icons.Default.Thermostat) {
@@ -154,10 +155,17 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
                         fontWeight = FontWeight.Bold, color = color)
                 }
             }
+            // Note Radeon VII limitation
+            if (snapshot?.memoryCortex != null) {
+                Text("Radeon VII: no hardware metrics (llama.cpp limitation)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
         }
     }
 
-    // VRAM Usage — all GPUs
+    // VRAM Usage — all GPUs (Radeon VII included via Memory Cortex)
     val vram = mutableListOf<Triple<String, Double, Double>>() // name, used, total
     snapshot?.gpu?.gpus?.firstOrNull()?.let { g ->
         if (g.memoryUsedMB != null && g.memoryTotalMB != null) {
@@ -188,7 +196,7 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
         }
     }
 
-    // GPU Utilization
+    // GPU Utilization (Radeon VII: not available)
     val utilization = mutableListOf<Pair<String, Double>>()
     snapshot?.gpu?.gpus?.firstOrNull()?.utilizationPercent?.let { utilization.add("DGX Spark" to it) }
     snapshot?.localGpu?.gpus?.firstOrNull()?.utilizationPercent?.let { utilization.add("RTX 3090" to it) }
@@ -201,10 +209,16 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
                     modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
                 )
             }
+            if (snapshot?.memoryCortex != null) {
+                Text("Radeon VII: not available",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
         }
     }
 
-    // Power Draw
+    // Power Draw (Radeon VII: not available)
     val power = mutableListOf<Triple<String, Double, Double?>>() // name, draw, limit
     snapshot?.gpu?.gpus?.firstOrNull()?.let { g ->
         g.powerDrawWatts?.let { power.add(Triple("DGX Spark", it, g.powerLimitWatts)) }
@@ -224,13 +238,19 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
                     )
                 }
             }
+            if (snapshot?.memoryCortex != null) {
+                Text("Radeon VII: not available",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 4.dp))
+            }
         }
     }
 
     // CPU & RAM
     val cpuRam = mutableListOf<Pair<String, SystemMetricsSnapshot>>()
     snapshot?.systemMetrics?.let { cpuRam.add("WSL2" to it) }
-    snapshot?.remoteSystemMetrics?.let { cpuRam.add("DGX" to it) }
+    snapshot?.remoteSystemMetrics?.let { cpuRam.add("DGX Spark" to it) }
     if (cpuRam.isNotEmpty()) {
         DashboardCard(title = "CPU & RAM", icon = Icons.Default.Computer) {
             cpuRam.forEach { (host, metrics) ->
@@ -261,7 +281,7 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
     // Network
     val network = mutableListOf<Pair<String, SystemMetricsSnapshot>>()
     snapshot?.systemMetrics?.let { if (it.networkInKBps != null) network.add("WSL2" to it) }
-    snapshot?.remoteSystemMetrics?.let { if (it.networkInKBps != null) network.add("DGX" to it) }
+    snapshot?.remoteSystemMetrics?.let { if (it.networkInKBps != null) network.add("DGX Spark" to it) }
     if (network.isNotEmpty()) {
         DashboardCard(title = "Network", icon = Icons.Default.Lan) {
             network.forEach { (host, metrics) ->
@@ -275,66 +295,8 @@ private fun MetricsView(snapshot: InfrastructureSnapshot?) {
         }
     }
 
-    // Service Health (providers, tunnels, multimodal combined)
-    DashboardCard(title = "Service Health", icon = Icons.Default.HealthAndSafety) {
-        snapshot?.providers?.providers?.forEach { (name, status) ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(status.healthy)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Provider: $name", style = MaterialTheme.typography.bodyMedium)
-                }
-                status.latencyMs?.let { Text("${it}ms", style = MaterialTheme.typography.labelSmall) }
-            }
-        }
-        snapshot?.tunnels?.forEach { result ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(result.tunnel.reachable)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Tunnel: ${result.tunnel.host}:${result.tunnel.port}",
-                        style = MaterialTheme.typography.bodyMedium)
-                }
-                result.tunnel.latencyMs?.let { Text("${it}ms", style = MaterialTheme.typography.labelSmall) }
-            }
-        }
-        snapshot?.memoryCortex?.let { cortex ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(cortex.status == "ok")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Memory Cortex", style = MaterialTheme.typography.bodyMedium)
-                }
-                Text(cortex.status.uppercase(), style = MaterialTheme.typography.labelSmall)
-            }
-        }
-        snapshot?.multimodal?.services?.forEach { svc ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(svc.status == "ok")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(svc.label, style = MaterialTheme.typography.bodyMedium)
-                }
-                svc.latencyMs?.let { Text("${it}ms", style = MaterialTheme.typography.labelSmall) }
-            }
-        }
-    }
+    // Service Health — reuses the same ServicesCard from Devices view
+    ServicesCard(snapshot)
 }
 
 // ── Shared card components ──
@@ -399,7 +361,12 @@ fun DashboardCard(
 // ── Device cards (used in Devices view) ──
 
 @Composable
-fun GpuCard(title: String, gpu: GpuMetricsSnapshot, models: List<Pair<String, String>> = emptyList()) {
+fun GpuCard(
+    title: String,
+    gpu: GpuMetricsSnapshot,
+    models: List<Pair<String, String>> = emptyList(),
+    systemMetrics: SystemMetricsSnapshot? = null
+) {
     val gpuInfo = gpu.gpus.firstOrNull()
     val statusColor = when {
         gpu.error != null -> StatusRed
@@ -457,6 +424,21 @@ fun GpuCard(title: String, gpu: GpuMetricsSnapshot, models: List<Pair<String, St
         } else {
             Text("No GPU data", style = MaterialTheme.typography.bodySmall)
         }
+
+        // System metrics (CPU, RAM, Network) if provided — used for DGX Spark
+        systemMetrics?.let { metrics ->
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            metrics.cpuUsagePercent?.let {
+                MetricRow("CPU", "${it.toInt()}%")
+            }
+            if (metrics.ramUsedMB != null && metrics.ramTotalMB != null) {
+                val usedGB = metrics.ramUsedMB!! / 1024.0
+                val totalGB = metrics.ramTotalMB!! / 1024.0
+                MetricRow("RAM", "%.1f / %.1f GB".format(usedGB, totalGB))
+            }
+            metrics.networkInKBps?.let { MetricRow("Network In", "%.1f KB/s".format(it)) }
+            metrics.networkOutKBps?.let { MetricRow("Network Out", "%.1f KB/s".format(it)) }
+        }
     }
 }
 
@@ -490,102 +472,78 @@ fun MemoryCortexCard(cortex: MemoryCortexSnapshot) {
     }
 }
 
+/** Unified services card — providers, tunnels, memory cortex, and multimodal in one card. */
 @Composable
-fun ProviderCard(providers: ProviderHealthSnapshot) {
-    val allHealthy = providers.providers.values.all { it.healthy }
-    val statusColor = if (allHealthy) StatusGreen else StatusRed
-
-    DashboardCard(title = "Providers", icon = Icons.Default.Cloud, statusColor = statusColor) {
-        providers.providers.forEach { (name, status) ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(status.healthy)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(name, style = MaterialTheme.typography.bodyMedium)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    status.latencyMs?.let {
-                        Text("${it}ms", style = MaterialTheme.typography.labelSmall)
-                    }
-                    if (status.consecutiveFailures > 0) {
-                        Text("${status.consecutiveFailures} failures",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = StatusRed)
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun TunnelCard(tunnels: List<TunnelMonitorResult>) {
-    val allReachable = tunnels.all { it.tunnel.reachable }
-    val statusColor = if (allReachable) StatusGreen else StatusRed
-
-    DashboardCard(title = "SSH Tunnels", icon = Icons.Default.Lan, statusColor = statusColor) {
-        tunnels.forEach { result ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(result.tunnel.reachable)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("${result.tunnel.host}:${result.tunnel.port}",
-                        style = MaterialTheme.typography.bodyMedium)
-                }
-                result.tunnel.latencyMs?.let {
-                    Text("${it}ms", style = MaterialTheme.typography.labelSmall)
-                }
-            }
-            result.service?.let { svc ->
-                Text("  ${svc.name}: ${svc.status ?: if (svc.active) "active" else "inactive"}",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-@Composable
-fun MultimodalCard(multimodal: MultimodalHealthSnapshot) {
+fun ServicesCard(snapshot: InfrastructureSnapshot?) {
+    // Compute overall health across all services
+    val checks = mutableListOf<Boolean>()
+    snapshot?.providers?.providers?.values?.forEach { checks.add(it.healthy) }
+    snapshot?.tunnels?.forEach { checks.add(it.tunnel.reachable) }
+    snapshot?.memoryCortex?.let { checks.add(it.status == "ok") }
+    snapshot?.multimodal?.services?.forEach { checks.add(it.status == "ok") }
     val statusColor = when {
-        multimodal.servicesUp == multimodal.servicesTotal -> StatusGreen
-        multimodal.servicesUp > 0 -> StatusYellow
-        else -> StatusRed
+        checks.isEmpty() -> StatusYellow
+        checks.all { it } -> StatusGreen
+        checks.none { it } -> StatusRed
+        else -> StatusYellow
     }
 
-    DashboardCard(
-        title = "Multimodal (${multimodal.servicesUp}/${multimodal.servicesTotal})",
-        icon = Icons.Default.Hub,
-        statusColor = statusColor
+    DashboardCard(title = "Services", icon = Icons.Default.Cloud, statusColor = statusColor) {
+        // LLM Providers
+        snapshot?.providers?.providers?.forEach { (name, status) ->
+            ServiceRow(
+                label = name,
+                healthy = status.healthy,
+                detail = status.latencyMs?.let { "${it}ms" },
+                error = if (status.consecutiveFailures > 0) "${status.consecutiveFailures} failures" else null
+            )
+        }
+
+        // SSH Tunnels
+        snapshot?.tunnels?.forEach { result ->
+            ServiceRow(
+                label = "Tunnel: ${result.tunnel.host}:${result.tunnel.port}",
+                healthy = result.tunnel.reachable,
+                detail = result.tunnel.latencyMs?.let { "${it}ms" }
+            )
+        }
+
+        // Memory Cortex
+        snapshot?.memoryCortex?.let { cortex ->
+            ServiceRow(
+                label = "Memory Cortex",
+                healthy = cortex.status == "ok",
+                detail = cortex.llmLatencyMs?.let { "${it}ms" }
+            )
+        }
+
+        // Multimodal Services
+        snapshot?.multimodal?.services?.forEach { svc ->
+            ServiceRow(
+                label = svc.label,
+                healthy = svc.status == "ok",
+                detail = svc.latencyMs?.let { "${it}ms" }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ServiceRow(label: String, healthy: Boolean, detail: String? = null, error: String? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        multimodal.services.forEach { svc ->
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusDot(svc.status == "ok")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(svc.label, style = MaterialTheme.typography.bodyMedium)
-                }
-                Column(horizontalAlignment = Alignment.End) {
-                    svc.model?.let {
-                        Text(it, style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    svc.latencyMs?.let {
-                        Text("${it}ms", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            StatusDot(healthy)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+        }
+        Column(horizontalAlignment = Alignment.End) {
+            detail?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+            error?.let {
+                Text(it, style = MaterialTheme.typography.labelSmall, color = StatusRed)
             }
         }
     }

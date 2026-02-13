@@ -15,8 +15,8 @@ android {
         applicationId = "com.oogley.billbot"
         minSdk = 26
         targetSdk = 34
-        versionCode = 4
-        versionName = "0.2.3"
+        versionCode = 5
+        versionName = "0.2.4"
     }
 
     buildTypes {
