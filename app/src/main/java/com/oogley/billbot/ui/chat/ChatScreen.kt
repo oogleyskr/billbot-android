@@ -39,11 +39,7 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .imePadding()
-    ) {
+    Column(modifier = Modifier.fillMaxSize()) {
         // Top bar
         TopAppBar(
             title = {
