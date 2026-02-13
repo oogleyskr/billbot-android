@@ -115,7 +115,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
                     Text("BillBot AI Companion",
                         style = MaterialTheme.typography.titleLarge)
                     Spacer(modifier = Modifier.height(2.dp))
-                    Text("v0.2.1",
+                    Text("v0.2.2",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(modifier = Modifier.height(16.dp))

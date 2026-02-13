@@ -28,13 +28,15 @@ enum class TokensView { TOTAL, BY_DEVICE }
  * [tokPerSec] - current generation tok/s (live from last measurement)
  * [avgTokPerSec] - rolling average tok/s (null if not available)
  * [completions] - total completions counted (null if not available)
+ * [role] - what this device does if not LLM inference (e.g. "Multimodal Services")
  */
 data class DeviceSpeed(
     val device: String,
     val model: String,
     val tokPerSec: Double,
     val avgTokPerSec: Double? = null,
-    val completions: Int? = null
+    val completions: Int? = null,
+    val role: String? = null
 )
 
 /**
@@ -130,6 +132,18 @@ class TokensViewModel @Inject constructor(
             }
         }
 
+        // RTX 3090 — multimodal services (STT, Vision, TTS, ImageGen)
+        infra.localGpu?.let { localGpu ->
+            localGpu.gpus.firstOrNull()?.let { gpu ->
+                speeds.add(DeviceSpeed(
+                    device = "RTX 3090",
+                    model = gpu.name.ifEmpty { "NVIDIA GeForce RTX 3090" },
+                    tokPerSec = 0.0,
+                    role = "Multimodal Services (STT, Vision, TTS, ImageGen)"
+                ))
+            }
+        }
+
         // Memory Cortex (Radeon VII) — llama.cpp Vulkan
         infra.memoryCortex?.let { cortex ->
             cortex.generationTokPerSec?.let { genSpeed ->
@@ -137,7 +151,8 @@ class TokensViewModel @Inject constructor(
                     speeds.add(DeviceSpeed(
                         device = "Radeon VII",
                         model = cortex.modelName ?: "Qwen3-8B",
-                        tokPerSec = genSpeed
+                        tokPerSec = genSpeed,
+                        role = "Memory Cortex (long-term memory LLM)"
                     ))
                 }
             }

@@ -441,8 +441,8 @@ private fun DeviceCard(model: SessionModelUsage, speed: DeviceSpeed?) {
 }
 
 /**
- * Card for a device that has live speed data but no token usage in sessions.usage.
- * This covers Memory Cortex (Radeon VII) which uses its own middleware, not the gateway.
+ * Card for a device that has infrastructure data but no token usage in sessions.usage.
+ * Covers devices like RTX 3090 (multimodal) and Memory Cortex (Radeon VII, own middleware).
  */
 @Composable
 private fun SpeedOnlyDeviceCard(speed: DeviceSpeed) {
@@ -464,22 +464,25 @@ private fun SpeedOnlyDeviceCard(speed: DeviceSpeed) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = speedColor(speed.tokPerSec).copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        "%.1f tok/s".format(speed.tokPerSec),
-                        style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = speedColor(speed.tokPerSec),
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+                // Only show tok/s badge for devices that actually do LLM inference
+                if (speed.tokPerSec > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = speedColor(speed.tokPerSec).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            "%.1f tok/s".format(speed.tokPerSec),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = speedColor(speed.tokPerSec),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
                 }
             }
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Token usage tracked separately via middleware",
+                speed.role ?: "Token usage tracked separately",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -553,6 +556,7 @@ private fun formatDeviceName(provider: String?, model: String?): String {
 private fun matchesDevice(provider: String?, model: String?, deviceName: String): Boolean {
     return when (deviceName) {
         "DGX Spark" -> provider == "spark"
+        "RTX 3090" -> false // Multimodal services, not LLM tokens
         "Radeon VII" -> false // Memory Cortex doesn't appear in sessions.usage
         "WSL2 CPU" -> provider == "heartbeat"
         else -> false

@@ -176,7 +176,7 @@ class ChatViewModel @Inject constructor(
         if (text.isBlank()) return
 
         val userMsg = UiMessage(role = "user", content = text)
-        _uiState.update { it.copy(messages = it.messages + userMsg, error = null) }
+        _uiState.update { it.copy(messages = it.messages + userMsg, isGenerating = true, error = null) }
 
         viewModelScope.launch {
             try {
