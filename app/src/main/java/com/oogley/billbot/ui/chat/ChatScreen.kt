@@ -21,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.foundation.layout.imePadding
@@ -39,12 +40,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().imePadding()) {
         // Top bar
         TopAppBar(
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("BillBot")
+                    Text("BillBot Direct Chat")
                     if (uiState.isGenerating) {
                         Spacer(modifier = Modifier.width(12.dp))
                         CircularProgressIndicator(
@@ -105,7 +106,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             tonalElevation = 3.dp,
             modifier = Modifier
                 .fillMaxWidth()
-                .imePadding()
         ) {
             Row(
                 modifier = Modifier
@@ -219,7 +219,7 @@ fun MessageBubble(message: UiMessage) {
                             if (message.isStreaming) "..." else ""
                         },
                         color = if (isUser) MaterialTheme.colorScheme.onPrimary
-                                else MaterialTheme.colorScheme.onSurfaceVariant,
+                                else Color.White,
                         style = MaterialTheme.typography.bodyLarge
                     )
 
