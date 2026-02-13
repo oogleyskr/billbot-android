@@ -50,17 +50,19 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        // Load history immediately if already connected, and on every reconnect
+        // Load cached messages immediately so the user sees their chat
+        // even before the WebSocket connects (survives process death)
+        viewModelScope.launch {
+            loadHistory()
+        }
+
+        // Refresh from server on every (re)connect
         viewModelScope.launch {
             gateway.connectionState.collect { state ->
                 if (state == ConnectionState.CONNECTED) {
                     loadHistory()
                 }
             }
-        }
-        // Also eagerly load if we're already connected (e.g. Activity recreated after screen lock)
-        if (gateway.connectionState.value == ConnectionState.CONNECTED) {
-            viewModelScope.launch { loadHistory() }
         }
     }
 
@@ -83,7 +85,7 @@ class ChatViewModel @Inject constructor(
             reasoningBuffer.clear()
             contentBuffer.clear()
             _uiState.update { it.copy(messages = messages, isGenerating = false) }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // History loading is non-critical
         }
     }
@@ -147,6 +149,8 @@ class ChatViewModel @Inject constructor(
 
             is ChatEvent.Completed -> {
                 val id = currentAssistantId ?: return
+                val finalContent = contentBuffer.toString()
+                val finalReasoning = reasoningBuffer.toString().takeIf { it.isNotEmpty() }
                 _uiState.update { state ->
                     state.copy(
                         messages = state.messages.map { msg ->
@@ -156,6 +160,15 @@ class ChatViewModel @Inject constructor(
                     )
                 }
                 currentAssistantId = null
+
+                // Persist completed assistant message to local cache
+                if (finalContent.isNotBlank()) {
+                    viewModelScope.launch {
+                        try {
+                            chatRepo.cacheMessage("android://companion", "assistant", finalContent, finalReasoning)
+                        } catch (_: Exception) { }
+                    }
+                }
             }
 
             is ChatEvent.Error -> {
@@ -187,6 +200,13 @@ class ChatViewModel @Inject constructor(
 
         val userMsg = UiMessage(role = "user", content = text)
         _uiState.update { it.copy(messages = it.messages + userMsg, isGenerating = true, error = null) }
+
+        // Persist user message to local cache immediately
+        viewModelScope.launch {
+            try {
+                chatRepo.cacheMessage("android://companion", "user", text)
+            } catch (_: Exception) { }
+        }
 
         viewModelScope.launch {
             try {

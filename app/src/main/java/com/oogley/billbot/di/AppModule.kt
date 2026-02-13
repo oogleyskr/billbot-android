@@ -1,6 +1,9 @@
 package com.oogley.billbot.di
 
 import android.content.Context
+import androidx.room.Room
+import com.oogley.billbot.data.db.AppDatabase
+import com.oogley.billbot.data.db.MessageDao
 import com.oogley.billbot.data.gateway.GatewayClient
 import com.oogley.billbot.data.preferences.UserPreferences
 import com.oogley.billbot.data.repository.ChatRepository
@@ -20,14 +23,26 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
+        return Room.databaseBuilder(context, AppDatabase::class.java, "billbot.db").build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideMessageDao(db: AppDatabase): MessageDao {
+        return db.messageDao()
+    }
+
+    @Provides
+    @Singleton
     fun provideUserPreferences(@ApplicationContext context: Context): UserPreferences {
         return UserPreferences(context)
     }
 
     @Provides
     @Singleton
-    fun provideChatRepository(gateway: GatewayClient): ChatRepository {
-        return ChatRepository(gateway)
+    fun provideChatRepository(gateway: GatewayClient, messageDao: MessageDao): ChatRepository {
+        return ChatRepository(gateway, messageDao)
     }
 
     @Provides
