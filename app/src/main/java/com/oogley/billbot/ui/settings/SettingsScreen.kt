@@ -97,20 +97,35 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
 
             // About section
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Icon(Icons.Default.Info, contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("About", style = MaterialTheme.typography.titleMedium)
                     }
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                    Text("BillBot Android Companion", style = MaterialTheme.typography.bodyMedium)
-                    Text("Version 1.0.0", style = MaterialTheme.typography.bodySmall,
+                    Text("BillBot AI Companion",
+                        style = MaterialTheme.typography.titleLarge)
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text("v0.2.0",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Text("OpenClaw Gateway Client", style = MaterialTheme.typography.bodySmall,
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Made with \u2764\uFE0F by Matt (oogley)",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Built on a fork of the OpenClaw project",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f))
                 }
             }
 

@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -31,6 +32,7 @@ import com.oogley.billbot.ui.connection.ConnectionScreen
 import com.oogley.billbot.ui.connection.ConnectionViewModel
 import com.oogley.billbot.ui.dashboard.DashboardScreen
 import com.oogley.billbot.ui.settings.SettingsScreen
+import com.oogley.billbot.ui.tokens.TokensScreen
 
 enum class BillBotTab(
     val route: String,
@@ -39,6 +41,7 @@ enum class BillBotTab(
 ) {
     Chat("chat", "Chat", Icons.AutoMirrored.Filled.Chat),
     Dashboard("dashboard", "Dashboard", Icons.Default.Dashboard),
+    Tokens("tokens", "Tokens", Icons.Default.Star),
     Settings("settings", "Settings", Icons.Default.Settings)
 }
 
@@ -99,6 +102,9 @@ fun BillBotNavHost() {
             }
             composable(BillBotTab.Dashboard.route) {
                 DashboardScreen()
+            }
+            composable(BillBotTab.Tokens.route) {
+                TokensScreen()
             }
             composable(BillBotTab.Settings.route) {
                 SettingsScreen()

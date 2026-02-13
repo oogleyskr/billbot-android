@@ -6,6 +6,7 @@ import com.oogley.billbot.data.preferences.UserPreferences
 import com.oogley.billbot.data.repository.ChatRepository
 import com.oogley.billbot.data.repository.DashboardRepository
 import com.oogley.billbot.data.repository.SettingsRepository
+import com.oogley.billbot.data.repository.TokensRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -39,5 +40,11 @@ object AppModule {
     @Singleton
     fun provideSettingsRepository(gateway: GatewayClient): SettingsRepository {
         return SettingsRepository(gateway)
+    }
+
+    @Provides
+    @Singleton
+    fun provideTokensRepository(gateway: GatewayClient): TokensRepository {
+        return TokensRepository(gateway)
     }
 }

@@ -399,6 +399,15 @@ class GatewayClient @Inject constructor() {
         return request("sessions.list")
     }
 
+    // Public API: Get sessions usage (all time)
+    suspend fun getSessionsUsage(): JsonElement? {
+        val params = buildJsonObject {
+            put("days", 36500) // ~100 years = all time
+            put("limit", 500)
+        }
+        return request("sessions.usage", params)
+    }
+
     // Public API: Health check
     suspend fun health(): JsonElement? {
         return request("health")
