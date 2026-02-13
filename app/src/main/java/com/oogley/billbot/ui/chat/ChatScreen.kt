@@ -4,7 +4,6 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -22,8 +21,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,7 +41,12 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize().imePadding()) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .statusBarsPadding()
+            .imePadding()
+    ) {
         // Top bar
         TopAppBar(
             title = {
@@ -86,29 +92,28 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             }
         }
 
-        // Messages
+        // Messages area
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
         ) {
+            // Paw emoji watermark — always visible as background
+            Text(
+                text = "\uD83D\uDC3E",
+                fontSize = 160.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.align(Alignment.Center)
+            )
+
             if (uiState.messages.isEmpty()) {
-                // Empty state
+                // Empty state text overlay
                 Column(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text(
-                        text = "\uD83D\uDC36",
-                        style = MaterialTheme.typography.displayLarge
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = "BillBot is ready",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(100.dp))
                     Text(
                         text = "Send a message to start chatting",
                         style = MaterialTheme.typography.bodyMedium,
@@ -131,14 +136,16 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
             }
         }
 
-        // Input area
+        // Input area — navigationBarsPadding so it sits above system nav bar when keyboard is closed
+        // (when keyboard is open, imePadding on the parent Column handles it, and the inset
+        // consumption chain means navigationBarsPadding adds 0 since IME already covers it)
         Surface(
             tonalElevation = 3.dp,
-            modifier = Modifier
-                .fillMaxWidth()
+            modifier = Modifier.fillMaxWidth()
         ) {
             Row(
                 modifier = Modifier
+                    .navigationBarsPadding()
                     .padding(8.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom

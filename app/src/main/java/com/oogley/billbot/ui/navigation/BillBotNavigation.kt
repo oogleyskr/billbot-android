@@ -1,7 +1,11 @@
 package com.oogley.billbot.ui.navigation
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Chat
@@ -17,7 +21,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -42,6 +45,7 @@ enum class BillBotTab(
     Settings("settings", "Settings", Icons.Default.Settings)
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun BillBotNavHost() {
     val navController = rememberNavController()
@@ -54,23 +58,29 @@ fun BillBotNavHost() {
         return
     }
 
-    // Hide bottom nav when keyboard is open (prevents it riding up with keyboard)
-    val imeInsets = WindowInsets.ime
-    val density = LocalDensity.current
-    val isKeyboardOpen = imeInsets.getBottom(density) > 0
+    // Detect keyboard using the stable Compose API (works with enableEdgeToEdge + adjustResize)
+    val isKeyboardOpen = WindowInsets.isImeVisible
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
+
+    // Hide bottom nav when keyboard is open on chat screen
+    val showBottomBar = !(isKeyboardOpen && currentRoute == BillBotTab.Chat.route)
 
     Scaffold(
+        // Don't let Scaffold consume any insets — each screen handles its own
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            if (!isKeyboardOpen) {
+            AnimatedVisibility(
+                visible = showBottomBar,
+                enter = slideInVertically(initialOffsetY = { it }),
+                exit = slideOutVertically(targetOffsetY = { it })
+            ) {
                 NavigationBar {
-                    val navBackStackEntry by navController.currentBackStackEntryAsState()
-                    val currentDestination = navBackStackEntry?.destination
-
                     BillBotTab.entries.forEach { tab ->
                         NavigationBarItem(
                             icon = { Icon(tab.icon, contentDescription = tab.label) },
                             label = { Text(tab.label) },
-                            selected = currentDestination?.hierarchy?.any { it.route == tab.route } == true,
+                            selected = navBackStackEntry?.destination?.hierarchy?.any { it.route == tab.route } == true,
                             onClick = {
                                 navController.navigate(tab.route) {
                                     popUpTo(navController.graph.findStartDestination().id) {
