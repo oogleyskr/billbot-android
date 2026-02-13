@@ -78,27 +78,34 @@ class ChatViewModel @Inject constructor(
         }
     }
 
+    private fun ensureAssistantBubble() {
+        if (currentAssistantId != null) return
+        currentAssistantId = java.util.UUID.randomUUID().toString()
+        reasoningBuffer.clear()
+        contentBuffer.clear()
+        val msg = UiMessage(
+            id = currentAssistantId!!,
+            role = "assistant",
+            content = "",
+            isStreaming = true
+        )
+        _uiState.update { state ->
+            state.copy(
+                messages = state.messages + msg,
+                isGenerating = true
+            )
+        }
+    }
+
     private fun handleChatEvent(event: ChatEvent) {
         when (event) {
             is ChatEvent.Started -> {
-                currentAssistantId = java.util.UUID.randomUUID().toString()
-                reasoningBuffer.clear()
-                contentBuffer.clear()
-                val msg = UiMessage(
-                    id = currentAssistantId!!,
-                    role = "assistant",
-                    content = "",
-                    isStreaming = true
-                )
-                _uiState.update { state ->
-                    state.copy(
-                        messages = state.messages + msg,
-                        isGenerating = true
-                    )
-                }
+                // Create bubble if not already active (dedup)
+                ensureAssistantBubble()
             }
 
             is ChatEvent.Delta -> {
+                ensureAssistantBubble()
                 contentBuffer.append(event.text)
                 updateCurrentAssistant(
                     content = contentBuffer.toString(),
@@ -107,6 +114,7 @@ class ChatViewModel @Inject constructor(
             }
 
             is ChatEvent.ReasoningDelta -> {
+                ensureAssistantBubble()
                 reasoningBuffer.append(event.text)
                 updateCurrentAssistant(
                     content = contentBuffer.toString(),
@@ -115,6 +123,7 @@ class ChatViewModel @Inject constructor(
             }
 
             is ChatEvent.ToolCall -> {
+                ensureAssistantBubble()
                 contentBuffer.append("\n[Tool: ${event.name}]\n")
                 updateCurrentAssistant(content = contentBuffer.toString())
             }
@@ -165,7 +174,7 @@ class ChatViewModel @Inject constructor(
         if (text.isBlank()) return
 
         val userMsg = UiMessage(role = "user", content = text)
-        _uiState.update { it.copy(messages = it.messages + userMsg, error = null) }
+        _uiState.update { it.copy(messages = it.messages + userMsg, error = null, isGenerating = true) }
 
         viewModelScope.launch {
             try {

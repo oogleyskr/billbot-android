@@ -403,12 +403,8 @@ class GatewayClient @Inject constructor() {
             put("message", message)
             put("idempotencyKey", UUID.randomUUID().toString())
         }
-        val result = request("chat.send", params)
-        // Emit Started immediately — lifecycle event may not always arrive
-        val status = result?.jsonObject?.get("status")?.jsonPrimitive?.contentOrNull
-        if (status == "started" || status == "ok") {
-            _chatEvents.emit(ChatEvent.Started)
-        }
+        request("chat.send", params)
+        // Started event comes via "agent" lifecycle stream or first "chat" delta
     }
 
     // Public API: Abort current chat
