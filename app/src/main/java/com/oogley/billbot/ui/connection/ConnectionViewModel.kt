@@ -7,11 +7,9 @@ import com.oogley.billbot.data.gateway.GatewayClient
 import com.oogley.billbot.data.preferences.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,32 +27,37 @@ class ConnectionViewModel @Inject constructor(
     private val _savedUrl = MutableStateFlow("")
     val savedUrl: StateFlow<String> = _savedUrl.asStateFlow()
 
-    private val _savedToken = MutableStateFlow("")
-    val savedToken: StateFlow<String> = _savedToken.asStateFlow()
+    companion object {
+        private const val DEFAULT_TOKEN = "local-dev-token"
+    }
 
     init {
+        // Forward gateway errors to UI
+        viewModelScope.launch {
+            gateway.lastError.collect { gatewayError ->
+                if (gatewayError != null) _error.value = gatewayError
+            }
+        }
+
+        // Load saved URL and auto-connect
         viewModelScope.launch {
             _savedUrl.value = preferences.gatewayUrl.first()
-            _savedToken.value = preferences.authToken.first()
 
-            // Auto-connect if we have saved credentials
             val autoConnect = preferences.autoConnect.first()
             if (autoConnect && _savedUrl.value.isNotEmpty()) {
-                connect(_savedUrl.value, _savedToken.value)
+                connect(_savedUrl.value)
             }
         }
     }
 
-    fun connect(url: String, token: String) {
+    fun connect(url: String) {
         viewModelScope.launch {
             _error.value = null
             preferences.setGatewayUrl(url)
-            preferences.setAuthToken(token)
             _savedUrl.value = url
-            _savedToken.value = token
 
             try {
-                gateway.connect(url, token)
+                gateway.connect(url, DEFAULT_TOKEN)
             } catch (e: Exception) {
                 _error.value = e.message
             }
@@ -62,6 +65,7 @@ class ConnectionViewModel @Inject constructor(
     }
 
     fun disconnect() {
+        _error.value = null
         gateway.disconnect()
     }
 }

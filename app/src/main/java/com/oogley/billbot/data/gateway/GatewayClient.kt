@@ -111,12 +111,12 @@ class GatewayClient @Inject constructor() {
 
             override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d(TAG, "WebSocket closed: $code $reason")
-                handleDisconnect()
+                handleDisconnect(code, reason)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e(TAG, "WebSocket failure: ${t.message}")
-                handleDisconnect()
+                handleDisconnect(1006, t.message ?: "Connection failed")
             }
         })
     }
@@ -285,12 +285,26 @@ class GatewayClient @Inject constructor() {
         }
     }
 
-    private fun handleDisconnect() {
+    // Last close reason, exposed for UI
+    private val _lastError = MutableStateFlow<String?>(null)
+    val lastError: StateFlow<String?> = _lastError.asStateFlow()
+
+    private fun handleDisconnect(code: Int = 1006, reason: String = "Connection lost") {
         tickWatchdogJob?.cancel()
         webSocket = null
-        failAllPending("Connection lost")
+        failAllPending(reason)
 
-        if (autoReconnect) {
+        // Store the error for UI
+        if (reason.isNotBlank() && reason != "Client disconnect") {
+            _lastError.value = reason
+        }
+
+        // Don't auto-reconnect on auth/protocol errors (1008 = policy violation)
+        val isAuthError = code == 1008 || reason.contains("device identity") ||
+                reason.contains("unauthorized") || reason.contains("invalid connect")
+        val wasConnected = _connectionState.value == ConnectionState.CONNECTED
+
+        if (autoReconnect && !isAuthError && wasConnected) {
             _connectionState.value = ConnectionState.RECONNECTING
             scope.launch {
                 Log.d(TAG, "Reconnecting in ${backoffMs}ms")

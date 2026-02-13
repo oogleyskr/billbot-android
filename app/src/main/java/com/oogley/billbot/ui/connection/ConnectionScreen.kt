@@ -4,17 +4,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import com.oogley.billbot.data.gateway.ConnectionState
 
@@ -24,15 +19,12 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
     val connectionState by viewModel.connectionState.collectAsState()
     val error by viewModel.error.collectAsState()
     val savedUrl by viewModel.savedUrl.collectAsState()
-    val savedToken by viewModel.savedToken.collectAsState()
 
     var url by remember(savedUrl) { mutableStateOf(savedUrl.ifEmpty { "wss://mattpc.gentoo-mackarel.ts.net" }) }
-    var token by remember(savedToken) { mutableStateOf(savedToken) }
-    var showToken by remember { mutableStateOf(false) }
 
     val isConnecting = connectionState == ConnectionState.CONNECTING ||
-            connectionState == ConnectionState.HANDSHAKING ||
-            connectionState == ConnectionState.RECONNECTING
+            connectionState == ConnectionState.HANDSHAKING
+    val isReconnecting = connectionState == ConnectionState.RECONNECTING
 
     Column(
         modifier = Modifier
@@ -69,30 +61,6 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri)
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Auth Token
-        OutlinedTextField(
-            value = token,
-            onValueChange = { token = it },
-            label = { Text("Auth Token") },
-            placeholder = { Text("Optional") },
-            leadingIcon = { Icon(Icons.Default.VpnKey, contentDescription = null) },
-            trailingIcon = {
-                IconButton(onClick = { showToken = !showToken }) {
-                    Icon(
-                        if (showToken) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                        contentDescription = if (showToken) "Hide" else "Show"
-                    )
-                }
-            },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !isConnecting,
-            visualTransformation = if (showToken) VisualTransformation.None
-                else PasswordVisualTransformation()
-        )
-
         Spacer(modifier = Modifier.height(24.dp))
 
         // Error message
@@ -113,7 +81,7 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Connect / Cancel buttons
+        // Connect / Cancel / Retry buttons
         if (isConnecting) {
             OutlinedButton(
                 onClick = { viewModel.disconnect() },
@@ -143,16 +111,34 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
                     when (connectionState) {
                         ConnectionState.CONNECTING -> "Establishing connection..."
                         ConnectionState.HANDSHAKING -> "Authenticating..."
-                        ConnectionState.RECONNECTING -> "Connection lost, reconnecting..."
                         else -> ""
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
+        } else if (isReconnecting) {
+            // Show retry instead of auto-cycling
+            Button(
+                onClick = { viewModel.connect(url) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+            ) {
+                Text("Retry", style = MaterialTheme.typography.titleMedium)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            OutlinedButton(
+                onClick = { viewModel.disconnect() },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Cancel")
+            }
         } else {
             Button(
-                onClick = { viewModel.connect(url, token) },
+                onClick = { viewModel.connect(url) },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(56.dp),
@@ -164,7 +150,7 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = "Not connected",
+                text = "Tailscale handles authentication",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
