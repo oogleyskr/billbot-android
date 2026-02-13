@@ -25,6 +25,20 @@ import com.oogley.billbot.data.gateway.model.UsageTotals
 import com.oogley.billbot.ui.theme.StatusBlue
 import com.oogley.billbot.ui.theme.StatusGreen
 
+/**
+ * Token Counter screen — shows all-time token usage across all BillBot devices.
+ *
+ * Two views toggled by a segmented button at the top:
+ *   1. "All Time Total" — hero card with giant formatted number (e.g. "12.3M"),
+ *      input/output breakdown with colored progress bars (blue=input, green=output),
+ *      cache read stats, and message count summary.
+ *   2. "By Device" — one card per model/provider showing that device's token total,
+ *      input vs output bars, and completion count. Provider names are mapped to
+ *      friendly device names (spark→DGX Spark, heartbeat→WSL2 CPU).
+ *
+ * Data source: `sessions.usage` gateway RPC (see UsageModels.kt for response shape).
+ * Pull-to-refresh triggers a fresh fetch from the gateway.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TokensScreen(viewModel: TokensViewModel = hiltViewModel()) {
@@ -91,9 +105,10 @@ fun TokensScreen(viewModel: TokensViewModel = hiltViewModel()) {
     }
 }
 
+/** "All Time Total" view — big hero number + input/output breakdown + message stats. */
 @Composable
 private fun TotalView(uiState: TokensUiState) {
-    // Hero card with giant token count
+    // Hero card — giant formatted token count centered (e.g. "4.2M" with "4,200,000 tokens" below)
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -194,6 +209,7 @@ private fun TotalView(uiState: TokensUiState) {
     }
 }
 
+/** "By Device" view — one card per model/provider with input/output breakdown. */
 @Composable
 private fun ByDeviceView(uiState: TokensUiState) {
     if (uiState.byModel.isEmpty()) {
@@ -217,6 +233,7 @@ private fun ByDeviceView(uiState: TokensUiState) {
     }
 }
 
+/** Card for a single device/model showing its token total and input/output bars. */
 @Composable
 private fun DeviceCard(model: SessionModelUsage) {
     val displayName = formatDeviceName(model.provider, model.model)
@@ -288,6 +305,7 @@ private fun DeviceCard(model: SessionModelUsage) {
     }
 }
 
+/** Reusable row: label + count on the right, colored progress bar below. */
 @Composable
 private fun TokenBreakdownRow(
     label: String,
@@ -335,6 +353,10 @@ private fun StatRow(label: String, value: String) {
     }
 }
 
+/**
+ * Map provider/model to a friendly device name for the UI.
+ * Known mappings: spark+gpt-oss → "DGX Spark", heartbeat → "WSL2 CPU".
+ */
 private fun formatDeviceName(provider: String?, model: String?): String {
     return when {
         provider == "spark" && model?.contains("gpt-oss") == true -> "DGX Spark"
@@ -345,6 +367,7 @@ private fun formatDeviceName(provider: String?, model: String?): String {
     }
 }
 
+/** Format token count for display: 1234 → "1.2K", 1234567 → "1.2M", 1234567890 → "1.23B". */
 private fun formatTokenCount(tokens: Long): String {
     return when {
         tokens >= 1_000_000_000 -> "%.2fB".format(tokens / 1_000_000_000.0)
@@ -354,6 +377,7 @@ private fun formatTokenCount(tokens: Long): String {
     }
 }
 
+/** Full comma-separated count shown below the hero number: "4,200,000 tokens". */
 private fun formatTokenCountFull(tokens: Long): String {
     return "%,d tokens".format(tokens)
 }

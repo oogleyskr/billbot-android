@@ -14,8 +14,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Which view the user is looking at on the Tokens screen. */
 enum class TokensView { TOTAL, BY_DEVICE }
 
+/**
+ * UI state for the Token Counter screen.
+ *
+ * [totals] - grand total across all devices/sessions (hero number)
+ * [messages] - aggregate message counts (user, assistant, tool calls, errors)
+ * [byModel] - per-model breakdown for the "By Device" view, sorted by cost/tokens desc
+ * [currentView] - which tab is active (TOTAL or BY_DEVICE)
+ */
 data class TokensUiState(
     val totals: UsageTotals = UsageTotals(),
     val messages: SessionMessageCounts = SessionMessageCounts(),
@@ -25,6 +34,13 @@ data class TokensUiState(
     val error: String? = null
 )
 
+/**
+ * ViewModel for the Token Counter screen.
+ *
+ * Fetches usage data once on init, user can pull-to-refresh for updates.
+ * Unlike DashboardViewModel, this doesn't poll — token counts don't change
+ * fast enough to warrant continuous polling.
+ */
 @HiltViewModel
 class TokensViewModel @Inject constructor(
     private val tokensRepo: TokensRepository
