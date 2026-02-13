@@ -45,8 +45,8 @@ fun BillBotNavHost() {
     val connectionViewModel: ConnectionViewModel = hiltViewModel()
     val connectionState by connectionViewModel.connectionState.collectAsState()
 
-    // Show connection screen if not connected
-    if (connectionState == ConnectionState.DISCONNECTED) {
+    // Show connection screen unless fully connected
+    if (connectionState != ConnectionState.CONNECTED) {
         ConnectionScreen(viewModel = connectionViewModel)
         return
     }

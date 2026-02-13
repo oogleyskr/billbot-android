@@ -113,47 +113,61 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Connect button
-        Button(
-            onClick = { viewModel.connect(url, token) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(56.dp),
-            enabled = !isConnecting && url.isNotBlank()
-        ) {
-            if (isConnecting) {
+        // Connect / Cancel buttons
+        if (isConnecting) {
+            OutlinedButton(
+                onClick = { viewModel.disconnect() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error
+                )
+            ) {
+                Text("Cancel", style = MaterialTheme.typography.titleMedium)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center,
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 CircularProgressIndicator(
-                    modifier = Modifier.size(24.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(16.dp),
                     strokeWidth = 2.dp
                 )
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 Text(
                     when (connectionState) {
-                        ConnectionState.CONNECTING -> "Connecting..."
-                        ConnectionState.HANDSHAKING -> "Handshaking..."
-                        ConnectionState.RECONNECTING -> "Reconnecting..."
-                        else -> "Connect"
-                    }
+                        ConnectionState.CONNECTING -> "Establishing connection..."
+                        ConnectionState.HANDSHAKING -> "Authenticating..."
+                        ConnectionState.RECONNECTING -> "Connection lost, reconnecting..."
+                        else -> ""
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            } else {
+            }
+        } else {
+            Button(
+                onClick = { viewModel.connect(url, token) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp),
+                enabled = url.isNotBlank()
+            ) {
                 Text("Connect", style = MaterialTheme.typography.titleMedium)
             }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Not connected",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Connection state indicator
-        Text(
-            text = when (connectionState) {
-                ConnectionState.DISCONNECTED -> "Not connected"
-                ConnectionState.CONNECTING -> "Establishing connection..."
-                ConnectionState.HANDSHAKING -> "Authenticating..."
-                ConnectionState.CONNECTED -> "Connected"
-                ConnectionState.RECONNECTING -> "Connection lost, reconnecting..."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
