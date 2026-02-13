@@ -15,13 +15,30 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+/** Which view the user is looking at on the Dashboard screen. */
+enum class DashboardView { DEVICES, METRICS }
+
+/**
+ * UI state for the Dashboard screen.
+ *
+ * [snapshot] - Latest infrastructure snapshot from the gateway (polled every 10s).
+ * [currentView] - Toggle between DEVICES (per-device cards) and METRICS (grouped by metric type).
+ */
 data class DashboardUiState(
     val snapshot: InfrastructureSnapshot? = null,
+    val currentView: DashboardView = DashboardView.DEVICES,
     val isLoading: Boolean = true,
     val error: String? = null,
     val lastUpdated: Long = 0
 )
 
+/**
+ * ViewModel for the Dashboard screen.
+ *
+ * Polls the gateway's `infrastructure` RPC every 10 seconds when connected.
+ * Data covers all hardware: DGX Spark, RTX 3090, Radeon VII (Memory Cortex),
+ * providers, tunnels, multimodal services, and system metrics (WSL2/DGX).
+ */
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val dashboardRepo: DashboardRepository,
@@ -83,6 +100,10 @@ class DashboardViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false, error = e.message) }
             }
         }
+    }
+
+    fun switchView(view: DashboardView) {
+        _uiState.update { it.copy(currentView = view) }
     }
 
     override fun onCleared() {
