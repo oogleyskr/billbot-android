@@ -50,13 +50,17 @@ class ChatViewModel @Inject constructor(
             }
         }
 
-        // Load history when connected
+        // Load history immediately if already connected, and on every reconnect
         viewModelScope.launch {
             gateway.connectionState.collect { state ->
                 if (state == ConnectionState.CONNECTED) {
                     loadHistory()
                 }
             }
+        }
+        // Also eagerly load if we're already connected (e.g. Activity recreated after screen lock)
+        if (gateway.connectionState.value == ConnectionState.CONNECTED) {
+            viewModelScope.launch { loadHistory() }
         }
     }
 
@@ -194,6 +198,20 @@ class ChatViewModel @Inject constructor(
                 _uiState.update { it.copy(isGenerating = false) }
             } catch (e: Exception) {
                 // Best effort
+            }
+        }
+    }
+
+    fun resetChat() {
+        viewModelScope.launch {
+            try {
+                chatRepo.resetSession()
+                _uiState.update { ChatUiState() }
+                currentAssistantId = null
+                reasoningBuffer.clear()
+                contentBuffer.clear()
+            } catch (e: Exception) {
+                _uiState.update { it.copy(error = "Failed to reset: ${e.message}") }
             }
         }
     }

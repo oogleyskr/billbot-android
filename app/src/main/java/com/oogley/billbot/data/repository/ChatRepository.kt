@@ -35,4 +35,8 @@ class ChatRepository @Inject constructor(
     suspend fun abort() {
         gateway.abortChat()
     }
+
+    suspend fun resetSession(sessionKey: String = "android://companion") {
+        gateway.resetSession(sessionKey)
+    }
 }

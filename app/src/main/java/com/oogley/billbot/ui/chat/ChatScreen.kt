@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.AddComment
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Stop
@@ -32,6 +33,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsState()
     var inputText by remember { mutableStateOf("") }
+    var showResetConfirm by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
 
     // Auto-scroll to bottom on new messages
@@ -67,10 +69,40 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
                     }
                 }
             },
+            actions = {
+                IconButton(onClick = { showResetConfirm = true }) {
+                    Icon(
+                        Icons.Default.AddComment,
+                        contentDescription = "New Chat"
+                    )
+                }
+            },
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = MaterialTheme.colorScheme.surface
             )
         )
+
+        // Reset confirmation dialog
+        if (showResetConfirm) {
+            AlertDialog(
+                onDismissRequest = { showResetConfirm = false },
+                title = { Text("New Chat") },
+                text = { Text("Start a fresh conversation? This clears the current session on the server.") },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showResetConfirm = false
+                        viewModel.resetChat()
+                    }) {
+                        Text("Reset")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetConfirm = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
 
         // Error banner
         if (uiState.error != null) {

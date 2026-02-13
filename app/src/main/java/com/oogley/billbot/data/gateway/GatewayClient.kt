@@ -374,6 +374,12 @@ class GatewayClient @Inject constructor() {
         return request("chat.history", params)
     }
 
+    // Public API: Reset session (clears server-side history)
+    suspend fun resetSession(sessionKey: String = "android://companion") {
+        val params = buildJsonObject { put("sessionKey", sessionKey) }
+        request("sessions.reset", params)
+    }
+
     // Public API: Get infrastructure snapshot
     suspend fun getInfrastructure(): JsonElement? {
         return request("infrastructure")
