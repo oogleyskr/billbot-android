@@ -145,7 +145,6 @@ fun ChatScreen(viewModel: ChatViewModel = hiltViewModel()) {
         ) {
             Row(
                 modifier = Modifier
-                    .navigationBarsPadding()
                     .padding(8.dp)
                     .fillMaxWidth(),
                 verticalAlignment = Alignment.Bottom

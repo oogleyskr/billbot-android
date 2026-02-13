@@ -1,8 +1,5 @@
 package com.oogley.billbot.ui.navigation
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
@@ -70,11 +67,7 @@ fun BillBotNavHost() {
         // Don't let Scaffold consume any insets — each screen handles its own
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            AnimatedVisibility(
-                visible = showBottomBar,
-                enter = slideInVertically(initialOffsetY = { it }),
-                exit = slideOutVertically(targetOffsetY = { it })
-            ) {
+            if (showBottomBar) {
                 NavigationBar {
                     BillBotTab.entries.forEach { tab ->
                         NavigationBarItem(
