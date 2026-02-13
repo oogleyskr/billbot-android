@@ -400,12 +400,14 @@ class GatewayClient @Inject constructor() {
     }
 
     // Public API: Get sessions usage (all time).
-    // Calls `sessions.usage` RPC with days=36500 (~100 years) to get all-time aggregates.
+    // Calls `sessions.usage` RPC with startDate far in the past to get all-time aggregates.
+    // Note: sessions.usage accepts startDate/endDate (NOT days — that's usage.cost only).
     // The gateway scans session JSONL files and aggregates by model/provider/channel/day.
     // Response decoded into SessionsUsageResult by TokensRepository.
     suspend fun getSessionsUsage(): JsonElement? {
         val params = buildJsonObject {
-            put("days", 36500)
+            put("startDate", "2020-01-01")
+            put("endDate", "2099-12-31")
             put("limit", 500)
         }
         return request("sessions.usage", params)
