@@ -26,7 +26,7 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
     val savedUrl by viewModel.savedUrl.collectAsState()
     val savedToken by viewModel.savedToken.collectAsState()
 
-    var url by remember(savedUrl) { mutableStateOf(savedUrl.ifEmpty { "ws://100.96.181.60:18789" }) }
+    var url by remember(savedUrl) { mutableStateOf(savedUrl.ifEmpty { "wss://mattpc.gentoo-mackarel.ts.net" }) }
     var token by remember(savedToken) { mutableStateOf(savedToken) }
     var showToken by remember { mutableStateOf(false) }
 
@@ -61,7 +61,7 @@ fun ConnectionScreen(viewModel: ConnectionViewModel) {
             value = url,
             onValueChange = { url = it },
             label = { Text("Gateway URL") },
-            placeholder = { Text("ws://100.96.181.60:18789") },
+            placeholder = { Text("wss://mattpc.gentoo-mackarel.ts.net") },
             leadingIcon = { Icon(Icons.Default.Link, contentDescription = null) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
