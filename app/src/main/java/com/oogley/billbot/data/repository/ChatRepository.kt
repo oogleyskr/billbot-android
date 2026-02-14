@@ -3,6 +3,7 @@ package com.oogley.billbot.data.repository
 import com.oogley.billbot.data.db.MessageDao
 import com.oogley.billbot.data.db.MessageEntity
 import com.oogley.billbot.data.gateway.GatewayClient
+import com.oogley.billbot.data.gateway.model.ChatAttachment
 import com.oogley.billbot.data.gateway.model.ChatEvent
 import com.oogley.billbot.data.gateway.model.ChatMessage
 import kotlinx.coroutines.flow.SharedFlow
@@ -21,15 +22,19 @@ class ChatRepository @Inject constructor(
 
     val chatEvents: SharedFlow<ChatEvent> = gateway.chatEvents
 
-    suspend fun sendMessage(text: String, sessionKey: String = "android://companion") {
+    suspend fun sendMessage(text: String, sessionKey: String) {
         gateway.sendChat(text, sessionKey)
     }
 
+    suspend fun sendMessageWithAttachments(text: String, sessionKey: String, attachments: List<ChatAttachment>) {
+        gateway.sendChatWithAttachments(text, sessionKey, attachments)
+    }
+
     /**
-     * Get chat history — tries server first, falls back to local cache.
+     * Get chat history -- tries server first, falls back to local cache.
      * Server response is cached locally so it survives process death.
      */
-    suspend fun getHistory(sessionKey: String = "android://companion"): List<ChatMessage> {
+    suspend fun getHistory(sessionKey: String): List<ChatMessage> {
         // Try loading from server
         val serverMessages = try {
             val result = gateway.getChatHistory(sessionKey) ?: null
@@ -89,11 +94,11 @@ class ChatRepository @Inject constructor(
         }
     }
 
-    suspend fun abort() {
-        gateway.abortChat()
+    suspend fun abort(sessionKey: String) {
+        gateway.abortChat(sessionKey)
     }
 
-    suspend fun resetSession(sessionKey: String = "android://companion") {
+    suspend fun resetSession(sessionKey: String) {
         gateway.resetSession(sessionKey)
         // Clear local cache when user explicitly resets
         messageDao.deleteBySession(sessionKey)

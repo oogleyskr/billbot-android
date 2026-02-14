@@ -15,8 +15,8 @@ android {
         applicationId = "com.oogley.billbot"
         minSdk = 26
         targetSdk = 34
-        versionCode = 8
-        versionName = "0.2.8"
+        versionCode = 9
+        versionName = "0.3.0"
     }
 
     buildTypes {
@@ -63,6 +63,7 @@ dependencies {
     // Lifecycle
     implementation(libs.lifecycle.runtime.compose)
     implementation(libs.lifecycle.viewmodel.compose)
+    implementation(libs.lifecycle.process)
 
     // Hilt
     implementation(libs.hilt.android)

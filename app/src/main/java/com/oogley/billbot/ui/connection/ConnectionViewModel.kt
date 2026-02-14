@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.oogley.billbot.data.gateway.ConnectionState
 import com.oogley.billbot.data.gateway.GatewayClient
+import com.oogley.billbot.data.gateway.model.AuthParams
 import com.oogley.billbot.data.preferences.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,9 @@ class ConnectionViewModel @Inject constructor(
     private val _savedUrl = MutableStateFlow("")
     val savedUrl: StateFlow<String> = _savedUrl.asStateFlow()
 
+    private val _savedAuthMode = MutableStateFlow("tailscale")
+    val savedAuthMode: StateFlow<String> = _savedAuthMode.asStateFlow()
+
     companion object {
         private const val DEFAULT_TOKEN = "local-dev-token"
     }
@@ -39,25 +43,39 @@ class ConnectionViewModel @Inject constructor(
             }
         }
 
-        // Load saved URL and auto-connect
+        // Load saved URL, auth mode, and auto-connect
         viewModelScope.launch {
             _savedUrl.value = preferences.gatewayUrl.first()
+            _savedAuthMode.value = preferences.authMode.first()
 
             val autoConnect = preferences.autoConnect.first()
             if (autoConnect && _savedUrl.value.isNotEmpty()) {
-                connect(_savedUrl.value)
+                connect(_savedUrl.value, _savedAuthMode.value, "", "")
             }
         }
     }
 
-    fun connect(url: String) {
+    fun connect(url: String, authMode: String = "tailscale", token: String = "", password: String = "") {
         viewModelScope.launch {
             _error.value = null
             preferences.setGatewayUrl(url)
+            preferences.setAuthMode(authMode)
             _savedUrl.value = url
+            _savedAuthMode.value = authMode
+
+            val authParams = when (authMode) {
+                "token" -> if (token.isNotEmpty()) AuthParams(token = token) else AuthParams(token = DEFAULT_TOKEN)
+                "password" -> AuthParams(password = password)
+                else -> AuthParams(token = DEFAULT_TOKEN) // tailscale mode
+            }
+
+            val authToken = when (authMode) {
+                "token" -> token.ifEmpty { DEFAULT_TOKEN }
+                else -> DEFAULT_TOKEN
+            }
 
             try {
-                gateway.connect(url, DEFAULT_TOKEN)
+                gateway.connect(url, authToken, authParams)
             } catch (e: Exception) {
                 _error.value = e.message
             }

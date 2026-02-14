@@ -40,6 +40,15 @@ data class ChatHistoryResponse(
     val sessionKey: String? = null
 )
 
+// Attachment in a chat message
+@Serializable
+data class ChatAttachment(
+    val type: String = "image",
+    val mimeType: String,
+    val fileName: String? = null,
+    val content: String // base64
+)
+
 // Session info
 @Serializable
 data class SessionInfo(
@@ -48,7 +57,9 @@ data class SessionInfo(
     val label: String? = null,
     val messageCount: Int? = null,
     val lastActiveAt: Long? = null,
-    val createdAt: Long? = null
+    val createdAt: Long? = null,
+    val model: String? = null,
+    val channelId: String? = null
 )
 
 @Serializable

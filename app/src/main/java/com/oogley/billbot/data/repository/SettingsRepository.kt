@@ -2,8 +2,12 @@ package com.oogley.billbot.data.repository
 
 import com.oogley.billbot.data.gateway.GatewayClient
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,6 +28,14 @@ class SettingsRepository @Inject constructor(
             put(path, value)
         }
         return gateway.patchConfig(patches)
+    }
+
+    suspend fun applyConfig(baseHash: String?, patch: JsonObject): JsonElement? {
+        val params = buildJsonObject {
+            baseHash?.let { put("baseHash", it) }
+            put("patch", patch)
+        }
+        return gateway.patchConfig(params)
     }
 
     suspend fun listSessions(): JsonElement? {

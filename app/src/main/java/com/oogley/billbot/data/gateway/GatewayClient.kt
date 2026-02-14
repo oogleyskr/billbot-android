@@ -41,6 +41,7 @@ class GatewayClient @Inject constructor() {
     private var webSocket: WebSocket? = null
     private var url: String = ""
     private var token: String = ""
+    private var authParams: AuthParams? = null
     private var autoReconnect = true
     private var backoffMs = INITIAL_BACKOFF_MS
     private var tickIntervalMs = 30000L
@@ -61,14 +62,22 @@ class GatewayClient @Inject constructor() {
     private val _chatEvents = MutableSharedFlow<ChatEvent>(replay = 0, extraBufferCapacity = 64)
     val chatEvents: SharedFlow<ChatEvent> = _chatEvents.asSharedFlow()
 
+    // Auth scopes from HelloOk
+    private val _grantedScopes = MutableStateFlow<List<String>>(emptyList())
+    val grantedScopes: StateFlow<List<String>> = _grantedScopes.asStateFlow()
+
     // Server info from hello-ok
     private var serverInfo: ServerInfo? = null
     private var policy: Policy? = null
     private var connId: String? = null
 
-    fun connect(gatewayUrl: String, authToken: String) {
+    // Last close code for auth error detection
+    private var lastCloseCode: Int = 0
+
+    fun connect(gatewayUrl: String, authToken: String, auth: AuthParams? = null) {
         url = gatewayUrl
         token = authToken
+        authParams = auth
         autoReconnect = true
         backoffMs = INITIAL_BACKOFF_MS
         doConnect()
@@ -122,12 +131,14 @@ class GatewayClient @Inject constructor() {
     }
 
     private fun performHandshake(ws: WebSocket) {
+        val effectiveAuth = authParams ?: if (token.isNotEmpty()) AuthParams(token = token) else null
+
         val connectParams = ConnectParams(
             client = ClientInfo(
                 version = "1.0.0",
                 instanceId = UUID.randomUUID().toString()
             ),
-            auth = if (token.isNotEmpty()) AuthParams(token = token) else null
+            auth = effectiveAuth
         )
 
         val requestId = UUID.randomUUID().toString()
@@ -152,9 +163,9 @@ class GatewayClient @Inject constructor() {
                     connId = helloOk.server.connId
                     tickIntervalMs = helloOk.policy.tickIntervalMs.toLong()
 
-                    // Save device token if provided
+                    // Save auth scopes
                     helloOk.auth?.let { auth ->
-                        // TODO: persist auth.deviceToken via UserPreferences
+                        _grantedScopes.value = auth.scopes
                     }
 
                     _connectionState.value = ConnectionState.CONNECTED
@@ -218,7 +229,6 @@ class GatewayClient @Inject constructor() {
     }
 
     // Handle "chat" events: { state: "delta"|"final"|"error"|"aborted", message: {...} }
-    // Matches the webchat UI implementation exactly
     private fun parseChatStateEvent(payload: JsonElement?) {
         if (payload == null) return
         scope.launch {
@@ -229,7 +239,6 @@ class GatewayClient @Inject constructor() {
                 when (state) {
                     "delta" -> {
                         val message = obj["message"]?.jsonObject ?: return@launch
-                        // Deltas are MONOLITHIC — full text so far, not incremental
                         val text = extractTextFromMessage(message)
                         if (text != null) _chatEvents.emit(ChatEvent.Delta(text))
                     }
@@ -293,6 +302,7 @@ class GatewayClient @Inject constructor() {
     private fun handleDisconnect(code: Int = 1006, reason: String = "Connection lost") {
         tickWatchdogJob?.cancel()
         webSocket = null
+        lastCloseCode = code
         failAllPending(reason)
 
         // Store the error for UI
@@ -352,67 +362,112 @@ class GatewayClient @Inject constructor() {
         }
     }
 
-    // Public API: Send chat message (streaming events come via chatEvents flow)
-    suspend fun sendChat(message: String, sessionKey: String = "android://companion") {
+    // ---- Chat API ----
+
+    suspend fun sendChat(message: String, sessionKey: String) {
         val params = buildJsonObject {
             put("sessionKey", sessionKey)
             put("message", message)
             put("idempotencyKey", UUID.randomUUID().toString())
         }
         request("chat.send", params)
-        // Started event comes via "agent" lifecycle stream or first "chat" delta
     }
 
-    // Public API: Abort current chat generation
-    // Server requires sessionKey to identify which session to abort
-    suspend fun abortChat(sessionKey: String = "android://companion") {
+    suspend fun sendChatWithAttachments(message: String, sessionKey: String, attachments: List<ChatAttachment>) {
+        val params = buildJsonObject {
+            put("sessionKey", sessionKey)
+            put("message", message)
+            put("idempotencyKey", UUID.randomUUID().toString())
+            putJsonArray("attachments") {
+                attachments.forEach { att ->
+                    addJsonObject {
+                        put("type", att.type)
+                        put("mimeType", att.mimeType)
+                        att.fileName?.let { put("fileName", it) }
+                        put("content", att.content)
+                    }
+                }
+            }
+        }
+        request("chat.send", params)
+    }
+
+    suspend fun abortChat(sessionKey: String) {
         val params = buildJsonObject { put("sessionKey", sessionKey) }
         request("chat.abort", params)
     }
 
-    // Public API: Get chat history
-    suspend fun getChatHistory(sessionKey: String = "android://companion"): JsonElement? {
+    suspend fun getChatHistory(sessionKey: String): JsonElement? {
         val params = buildJsonObject { put("sessionKey", sessionKey) }
         return request("chat.history", params)
     }
 
-    // Public API: Reset session (clears server-side history)
-    // Server schema uses "key" (not "sessionKey") with additionalProperties:false
-    suspend fun resetSession(sessionKey: String = "android://companion") {
+    // ---- Session API ----
+
+    suspend fun resetSession(sessionKey: String) {
         val params = buildJsonObject { put("key", sessionKey) }
         request("sessions.reset", params)
     }
 
-    // Public API: Get infrastructure snapshot
-    suspend fun getInfrastructure(): JsonElement? {
-        return request("infrastructure")
-    }
-
-    // Public API: Get config
-    suspend fun getConfig(): JsonElement? {
-        return request("config.get")
-    }
-
-    // Public API: Get config schema
-    suspend fun getConfigSchema(): JsonElement? {
-        return request("config.schema")
-    }
-
-    // Public API: Patch config
-    suspend fun patchConfig(patches: JsonElement): JsonElement? {
-        return request("config.patch", patches)
-    }
-
-    // Public API: List sessions
     suspend fun listSessions(): JsonElement? {
         return request("sessions.list")
     }
 
-    // Public API: Get sessions usage (all time).
-    // Calls `sessions.usage` RPC with startDate far in the past to get all-time aggregates.
-    // Note: sessions.usage accepts startDate/endDate (NOT days — that's usage.cost only).
-    // The gateway scans session JSONL files and aggregates by model/provider/channel/day.
-    // Response decoded into SessionsUsageResult by TokensRepository.
+    suspend fun deleteSession(key: String, deleteTranscript: Boolean = true): JsonElement? {
+        val params = buildJsonObject {
+            put("key", key)
+            put("deleteTranscript", deleteTranscript)
+        }
+        return request("sessions.delete", params)
+    }
+
+    suspend fun compactSession(key: String, maxLines: Int): JsonElement? {
+        val params = buildJsonObject {
+            put("key", key)
+            put("maxLines", maxLines)
+        }
+        return request("sessions.compact", params)
+    }
+
+    suspend fun previewSessions(keys: List<String>): JsonElement? {
+        val params = buildJsonObject {
+            putJsonArray("keys") { keys.forEach { add(it) } }
+        }
+        return request("sessions.preview", params)
+    }
+
+    suspend fun patchSession(key: String, label: String? = null, agent: String? = null, model: String? = null): JsonElement? {
+        val params = buildJsonObject {
+            put("key", key)
+            label?.let { put("label", it) }
+            agent?.let { put("agentId", it) }
+            model?.let { put("model", it) }
+        }
+        return request("sessions.patch", params)
+    }
+
+    // ---- Infrastructure API ----
+
+    suspend fun getInfrastructure(): JsonElement? {
+        return request("infrastructure")
+    }
+
+    // ---- Config API ----
+
+    suspend fun getConfig(): JsonElement? {
+        return request("config.get")
+    }
+
+    suspend fun getConfigSchema(): JsonElement? {
+        return request("config.schema")
+    }
+
+    suspend fun patchConfig(patches: JsonElement): JsonElement? {
+        return request("config.patch", patches)
+    }
+
+    // ---- Usage API ----
+
     suspend fun getSessionsUsage(): JsonElement? {
         val params = buildJsonObject {
             put("startDate", "2020-01-01")
@@ -422,7 +477,18 @@ class GatewayClient @Inject constructor() {
         return request("sessions.usage", params)
     }
 
-    // Public API: Health check
+    // ---- Logs API ----
+
+    suspend fun tailLogs(cursor: String? = null, limit: Int = 200): JsonElement? {
+        val params = buildJsonObject {
+            cursor?.let { put("cursor", it) }
+            put("limit", limit)
+        }
+        return request("logs.tail", params)
+    }
+
+    // ---- Health API ----
+
     suspend fun health(): JsonElement? {
         return request("health")
     }

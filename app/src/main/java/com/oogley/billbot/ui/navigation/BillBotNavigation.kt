@@ -31,6 +31,7 @@ import com.oogley.billbot.ui.chat.ChatScreen
 import com.oogley.billbot.ui.connection.ConnectionScreen
 import com.oogley.billbot.ui.connection.ConnectionViewModel
 import com.oogley.billbot.ui.dashboard.DashboardScreen
+import com.oogley.billbot.ui.logs.LogsScreen
 import com.oogley.billbot.ui.settings.SettingsScreen
 import com.oogley.billbot.ui.tokens.TokensScreen
 
@@ -63,8 +64,8 @@ fun BillBotNavHost() {
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    // Hide bottom nav when keyboard is open on chat screen
-    val showBottomBar = !(isKeyboardOpen && currentRoute == BillBotTab.Chat.route)
+    // Hide bottom nav when keyboard is open on chat screen, or when on sub-routes
+    val showBottomBar = !(isKeyboardOpen && currentRoute == BillBotTab.Chat.route) && currentRoute != "logs"
 
     Scaffold(
         // Don't let Scaffold consume any insets — each screen handles its own
@@ -107,7 +108,14 @@ fun BillBotNavHost() {
                 TokensScreen()
             }
             composable(BillBotTab.Settings.route) {
-                SettingsScreen()
+                SettingsScreen(
+                    onNavigateToLogs = { navController.navigate("logs") }
+                )
+            }
+            composable("logs") {
+                LogsScreen(
+                    onBack = { navController.popBackStack() }
+                )
             }
         }
     }

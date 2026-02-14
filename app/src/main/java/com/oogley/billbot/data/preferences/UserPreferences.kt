@@ -26,6 +26,11 @@ class UserPreferences @Inject constructor(
         private val DEVICE_ID = stringPreferencesKey("device_id")
         private val DARK_MODE = booleanPreferencesKey("dark_mode")
         private val AUTO_CONNECT = booleanPreferencesKey("auto_connect")
+        private val LAST_SESSION_KEY = stringPreferencesKey("last_session_key")
+        private val NOTIFICATIONS_ENABLED = booleanPreferencesKey("notifications_enabled")
+        private val BACKGROUND_SERVICE = booleanPreferencesKey("background_service")
+        private val AUTH_MODE = stringPreferencesKey("auth_mode") // "tailscale" | "token" | "password"
+        private val DEVICE_TOKEN = stringPreferencesKey("device_token")
     }
 
     val gatewayUrl: Flow<String> = context.dataStore.data.map { prefs ->
@@ -48,6 +53,26 @@ class UserPreferences @Inject constructor(
         prefs[AUTO_CONNECT] ?: true
     }
 
+    val lastSessionKey: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[LAST_SESSION_KEY] ?: "android://companion"
+    }
+
+    val notificationsEnabled: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[NOTIFICATIONS_ENABLED] ?: true
+    }
+
+    val backgroundService: Flow<Boolean> = context.dataStore.data.map { prefs ->
+        prefs[BACKGROUND_SERVICE] ?: false
+    }
+
+    val authMode: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[AUTH_MODE] ?: "tailscale"
+    }
+
+    val deviceToken: Flow<String> = context.dataStore.data.map { prefs ->
+        prefs[DEVICE_TOKEN] ?: ""
+    }
+
     suspend fun setGatewayUrl(url: String) {
         context.dataStore.edit { it[GATEWAY_URL] = url }
     }
@@ -66,5 +91,25 @@ class UserPreferences @Inject constructor(
 
     suspend fun setAutoConnect(enabled: Boolean) {
         context.dataStore.edit { it[AUTO_CONNECT] = enabled }
+    }
+
+    suspend fun setLastSessionKey(key: String) {
+        context.dataStore.edit { it[LAST_SESSION_KEY] = key }
+    }
+
+    suspend fun setNotificationsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[NOTIFICATIONS_ENABLED] = enabled }
+    }
+
+    suspend fun setBackgroundService(enabled: Boolean) {
+        context.dataStore.edit { it[BACKGROUND_SERVICE] = enabled }
+    }
+
+    suspend fun setAuthMode(mode: String) {
+        context.dataStore.edit { it[AUTH_MODE] = mode }
+    }
+
+    suspend fun setDeviceToken(token: String) {
+        context.dataStore.edit { it[DEVICE_TOKEN] = token }
     }
 }

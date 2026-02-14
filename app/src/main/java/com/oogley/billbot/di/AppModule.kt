@@ -4,12 +4,15 @@ import android.content.Context
 import androidx.room.Room
 import com.oogley.billbot.data.db.AppDatabase
 import com.oogley.billbot.data.db.MessageDao
+import com.oogley.billbot.data.db.SessionDao
 import com.oogley.billbot.data.gateway.GatewayClient
 import com.oogley.billbot.data.preferences.UserPreferences
 import com.oogley.billbot.data.repository.ChatRepository
 import com.oogley.billbot.data.repository.DashboardRepository
+import com.oogley.billbot.data.repository.LogsRepository
 import com.oogley.billbot.data.repository.SettingsRepository
 import com.oogley.billbot.data.repository.TokensRepository
+import com.oogley.billbot.data.session.SessionManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -24,7 +27,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideAppDatabase(@ApplicationContext context: Context): AppDatabase {
-        return Room.databaseBuilder(context, AppDatabase::class.java, "billbot.db").build()
+        return Room.databaseBuilder(context, AppDatabase::class.java, "billbot.db")
+            .addMigrations(AppDatabase.MIGRATION_1_2)
+            .build()
     }
 
     @Provides
@@ -35,8 +40,20 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideSessionDao(db: AppDatabase): SessionDao {
+        return db.sessionDao()
+    }
+
+    @Provides
+    @Singleton
     fun provideUserPreferences(@ApplicationContext context: Context): UserPreferences {
         return UserPreferences(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideSessionManager(gateway: GatewayClient, preferences: UserPreferences, sessionDao: SessionDao): SessionManager {
+        return SessionManager(gateway, preferences, sessionDao)
     }
 
     @Provides
@@ -61,5 +78,11 @@ object AppModule {
     @Singleton
     fun provideTokensRepository(gateway: GatewayClient): TokensRepository {
         return TokensRepository(gateway)
+    }
+
+    @Provides
+    @Singleton
+    fun provideLogsRepository(gateway: GatewayClient): LogsRepository {
+        return LogsRepository(gateway)
     }
 }
